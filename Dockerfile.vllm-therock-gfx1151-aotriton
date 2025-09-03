@@ -94,4 +94,7 @@ COPY scripts/vllm-env.sh /etc/profile.d/vllm-env.sh
 COPY scripts/vllm-banner.sh /etc/profile.d/vllm-banner.sh
 RUN chmod 644 /etc/profile.d/vllm-env.sh /etc/profile.d/vllm-banner.sh
 
+COPY scripts/start_vllm /usr/local/bin/start-vllm
+RUN chmod 755 /usr/local/bin/start-vllm
+
 CMD ["bash", "-c", "source .venv/bin/activate && bash"]

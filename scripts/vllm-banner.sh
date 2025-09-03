@@ -1,5 +1,30 @@
 #!/usr/bin/env bash
-# vLLM Toolbox banner
+# Lightweight banner with machine/GPU and ROCm version (vLLM edition)
+# No Triton env sourcing, same info/format as the image/video banner.
+
+# Only show for interactive shells
+case $- in *i*) ;; *) return 0 ;; esac
+
+oem_info() {
+  local v="" m="" d lv lm
+  for d in /sys/class/dmi/id /sys/devices/virtual/dmi/id; do
+    [[ -r "$d/sys_vendor" ]] && v=$(<"$d/sys_vendor")
+    [[ -r "$d/product_name" ]] && m=$(<"$d/product_name")
+    [[ -n "$v" || -n "$m" ]] && break
+  done
+  # ARM/SBC fallback
+  if [[ -z "$v" && -z "$m" && -r /proc/device-tree/model ]]; then
+    tr -d '\0' </proc/device-tree/model
+    return
+  fi
+  lv=$(printf '%s' "$v" | tr '[:upper:]' '[:lower:]')
+  lm=$(printf '%s' "$m" | tr '[:upper:]' '[:lower:]')
+  if [[ -n "$m" && "$lm" == "$lv "* ]]; then
+    printf '%s\n' "$m"
+  else
+    printf '%s %s\n' "${v:-Unknown}" "${m:-Unknown}"
+  fi
+}
 
 gpu_name() {
   local name=""
@@ -7,49 +32,67 @@ gpu_name() {
     name=$(rocm-smi --showproductname --csv 2>/dev/null | tail -n1 | cut -d, -f2)
     [[ -z "$name" ]] && name=$(rocm-smi --showproductname 2>/dev/null | grep -m1 -E 'Product Name|Card series' | sed 's/.*: //')
   fi
-  if [[ -z "$name" ]]; then
-    name="Unknown AMD GPU"
+  if [[ -z "$name" ]] && command -v rocminfo >/dev/null 2>&1; then
+    name=$(rocminfo 2>/dev/null | awk -F': ' '/^[[:space:]]*Name:/{print $2; exit}')
   fi
-  printf '%s\n' "$name"
+  if [[ -z "$name" ]] && command -v lspci >/dev/null 2>&1; then
+    name=$(lspci -nn 2>/dev/null | grep -Ei 'vga|display|gpu' | grep -i amd | head -n1 | cut -d: -f3-)
+  fi
+  # trim
+  name=$(printf '%s' "$name" | sed -e 's/^[[:space:]]\+//' -e 's/[[:space:]]\+$//' -e 's/[[:space:]]\{2,\}/ /g')
+  printf '%s\n' "${name:-Unknown AMD GPU}"
 }
 
-vllm_version() {
-  python -c "import vllm; print(vllm.__version__)" 2>/dev/null || echo "unknown"
+rocm_version() {
+  # Prefer the PyTorch HIP version from the venv, fallback to rocm pkg metadata
+  local PY="/torch-therock/.venv/bin/python"
+  [[ -x "$PY" ]] || PY="python"
+  "$PY" - <<'PY' 2>/dev/null || true
+try:
+    import torch
+    v = getattr(getattr(torch, "version", None), "hip", "") or ""
+    if v:
+        print(v)
+    else:
+        raise Exception("no torch.version.hip")
+except Exception:
+    try:
+        import importlib.metadata as im
+        try:
+            print(im.version("_rocm_sdk_core"))
+        except Exception:
+            print(im.version("rocm"))
+    except Exception:
+        print("")
+PY
 }
 
-# Simple model selector
-vllm_start() {
-  echo
-  echo "Select a model to serve:"
-  echo "1) Qwen2.5-7B-Instruct  (recommended, ~14GB VRAM)"
-  echo "2) Llama-3.1-8B-Instruct (~16GB VRAM)"  
-  echo "3) Qwen3-8B (~16GB VRAM, latest with thinking mode)"
-  echo
-  read -p "Choose [1-3]: " choice
-  
-  case $choice in
-    1) vllm serve Qwen/Qwen2.5-7B-Instruct --host 0.0.0.0 --port 8000 --download-dir ~/models --dtype float16 --max-model-len 32768 ;;
-    2) vllm serve meta-llama/Llama-3.1-8B-Instruct --host 0.0.0.0 --port 8000 --download-dir ~/models --dtype float16 --max-model-len 32768 ;;
-    3) vllm serve Qwen/Qwen3-8B --host 0.0.0.0 --port 8000 --download-dir ~/models --dtype float16 --max-model-len 32768 --enable-reasoning --reasoning-parser qwen3 ;;
-    *) echo "Invalid choice." ;;
-  esac
-}
-
+MACHINE="$(oem_info)"
 GPU="$(gpu_name)"
-VLLM_VER="$(vllm_version)"
+ROCM_VER="$(rocm_version)"
 
 echo
-echo "vLLM Toolbox - AMD STRIX HALO (gfx1151)"
-echo "GPU: $GPU"
-echo "vLLM: $VLLM_VER"
-echo
-echo "Commands:"
-echo "  vllm_start  - Start model server" 
-echo "  vllm_test   - Test API"
-echo "  ls ~/models - List downloaded models"
-echo
-echo "Server will be available at: http://localhost:8000"
-echo
+cat <<'ASCII'
+███████╗████████╗██████╗ ██╗██╗  ██╗      ██╗  ██╗ █████╗ ██╗      ██████╗ 
+██╔════╝╚══██╔══╝██╔══██╗██║╚██╗██╔╝      ██║  ██║██╔══██╗██║     ██╔═══██╗
+███████╗   ██║   ██████╔╝██║ ╚███╔╝       ███████║███████║██║     ██║   ██║
+╚════██║   ██║   ██╔══██╗██║ ██╔██╗       ██╔══██║██╔══██║██║     ██║   ██║
+███████║   ██║   ██║  ██║██║██╔╝ ██╗      ██║  ██║██║  ██║███████╗╚██████╔╝
+╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═╝      ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ 
 
-# Test alias
-alias vllm_test='curl -X POST http://localhost:8000/v1/chat/completions -H "Content-Type: application/json" -d '\''{"model":"auto","messages":[{"role":"user","content":"Hello!"}]}'\'''
+                               v L L M                                      
+ASCII
+echo
+printf 'AMD STRIX HALO — vLLM Toolbox (gfx1151, ROCm via TheRock)\n'
+[[ -n "$ROCM_VER" ]] && printf 'ROCm nightly: %s\n' "$ROCM_VER"
+echo
+printf 'Machine: %s\n' "$MACHINE"
+printf 'GPU    : %s\n\n' "$GPU"
+printf 'Repo   : https://github.com/kyuz0/amd-strix-halo-vllm-toolboxes\n'
+printf 'Image  : docker.io/kyuz0/vllm-therock-gfx1151-aotriton:latest\n\n'
+printf 'Included:\n'
+printf '  - %-16s → %s\n' "start-vllm (wizard)" "Beginner-friendly launcher that guides you through model & settings"
+printf '  - %-16s → %s\n' "vLLM server" "vllm serve Qwen/Qwen2.5-7B-Instruct --download-dir ~/vllm-models"
+printf '  - %-16s → %s\n' "API test"    "curl localhost:8000/v1/chat/completions (see README)"
+echo
+printf 'SSH tip: ssh -L 8000:localhost:8000 user@host\n\n'
