@@ -95,6 +95,12 @@ fi
 SEL="${MODELS[$((CHOICE-1))]}"
 IFS='|' read -r SEL_LABEL HF_REPO QUANT_HINT COMPAT NOTE <<<"$SEL"
 
+# Model-specific dtype requirements
+REQUIRED_DTYPE=""
+if [[ "$QUANT_HINT" == "mxfp4" ]]; then
+  REQUIRED_DTYPE="bfloat16"
+fi
+
 # Quantization flag heuristic
 QUANT_FLAG=()
 case "$QUANT_HINT" in
@@ -135,9 +141,21 @@ printf 'KV cache dtype (auto|int8|fp8) [%s]: ' "$KV_CACHE_DTYPE_DEFAULT"
 read -r REPLY_KV
 KV_CACHE_DTYPE="${REPLY_KV:-$KV_CACHE_DTYPE_DEFAULT}"
 
-printf 'Model dtype (float16|bfloat16) [%s]: ' "$DTYPE_DEFAULT"
+# Model dtype prompt (use required dtype if set)
+dtype_default="$DTYPE_DEFAULT"
+if [[ -n "$REQUIRED_DTYPE" ]]; then
+  dtype_default="$REQUIRED_DTYPE"
+fi
+printf 'Model dtype (float16|bfloat16) [%s]: ' "$dtype_default"
 read -r REPLY_DTYPE
-DTYPE="${REPLY_DTYPE:-$DTYPE_DEFAULT}"
+DTYPE="${REPLY_DTYPE:-$dtype_default}"
+
+# Enforce required dtype if user chose something else
+if [[ -n "$REQUIRED_DTYPE" && "$DTYPE" != "$REQUIRED_DTYPE" ]]; then
+  echo "Note: this quantization requires --dtype=$REQUIRED_DTYPE; overriding."
+  DTYPE="$REQUIRED_DTYPE"
+fi
+
 
 printf 'GPU memory utilization (0.50‑0.98) [%s]: ' "$GPU_UTIL_DEFAULT"
 read -r REPLY_UTIL
