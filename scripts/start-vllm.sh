@@ -40,32 +40,24 @@ fi
 print_divider() { printf '\n%s\n' "────────────────────────────────────────────────────────"; }
 
 # --- curated model list (recent, likely to fit <= ~100GB with sane settings) ---
-# Format: label|hf_repo|quant_hint
+# Format: label|hf_repo|quant_hint|compat|note
 MODELS=(
-  # label | hf_repo | quant_hint | compat | note
   "Llama-4 Scout 17B-16E Instruct FP4|nvidia/Llama-4-Scout-17B-16E-Instruct-FP4|modelopt|nvidia_only|Optimized for NVIDIA; FP4 path may not work on AMD/ROCm"
   "Llama-4 Scout 17B-16E Instruct FP8|nvidia/Llama-4-Scout-17B-16E-Instruct-FP8|modelopt|nvidia_only|Optimized for NVIDIA; FP8 ModelOpt path may not work on AMD/ROCm"
-  "OpenAI GPT‑OSS 20B (MXFP4)|openai/gpt-oss-20b|mxfp4|experimental|MXFP4 support requires recent vLLM; performance/compat on AMD RDNA iGPU varies"
-  "OpenAI GPT‑OSS 120B (MXFP4, huge)|openai/gpt-oss-120b|mxfp4|too_large|~120B total params; not practical on a single APU"
-  "GLM‑4.5‑Air FP8 (12B active)|zai-org/GLM-4.5-Air-FP8|fp8|multi_gpu_fp8|Published FP8; vendor recommends multi‑GPU with native FP8"
+  "OpenAI GPT-OSS 20B (MXFP4)|openai/gpt-oss-20b|mxfp4|experimental|MXFP4 support requires recent vLLM; performance/compat on AMD RDNA iGPU varies"
+  "OpenAI GPT-OSS 120B (MXFP4, huge)|openai/gpt-oss-120b|mxfp4|too_large|~120B total params; not practical on a single APU"
+  "GLM-4.5-Air FP8 (12B active)|zai-org/GLM-4.5-Air-FP8|fp8|multi_gpu_fp8|Published FP8; vendor recommends multi-GPU with native FP8"
   "Gemma 3 12B IT (FP16)|google/gemma-3-12b-it|fp16|amd_ok|Good baseline"
   "Gemma 3 27B IT (FP16)|google/gemma-3-27b-it|fp16|borderline|Large; consider GPTQ variant if memory tight"
-  "Gemma 3 27B IT (GPTQ 4bit)|ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g|gptq|amd_ok|Weight‑only INT4 reduces memory; throughput may drop"
+  "Gemma 3 27B IT (GPTQ 4bit)|ISTA-DASLab/gemma-3-27b-it-GPTQ-4b-128g|gptq|amd_ok|Weight-only INT4 reduces memory; throughput may drop"
   "Qwen3 8B Instruct (FP16)|Qwen/Qwen3-8B-Instruct|fp16|amd_ok|Solid quality, easy fit"
   "Qwen3 8B Instruct (AWQ 4bit)|Qwen/Qwen3-8B-AWQ|awq|amd_ok|Official AWQ"
   "Qwen3 14B Instruct (FP16)|Qwen/Qwen3-14B-Instruct|fp16|amd_ok|"
   "Qwen3 14B Instruct (AWQ 4bit)|Qwen/Qwen3-14B-AWQ|awq|amd_ok|"
   "Qwen3 30B A3B Instruct (FP16)|Qwen/Qwen3-30B-A3B-Instruct-2507|fp16|amd_ok|MoE; fits with careful context/concurrency"
   "Qwen3 30B A3B Instruct (AWQ 4bit)|cpatonn/Qwen3-30B-A3B-Instruct-2507-AWQ-4bit|awq|community|Community AWQ; quality varies"
-)|Qwen/Qwen3-8B-Instruct|fp16"
-  "Qwen3 8B Instruct (AWQ int4)|Qwen/Qwen3-8B-AWQ|awq"
-  "Qwen3 14B Instruct (FP16)|Qwen/Qwen3-14B-Instruct|fp16"
-  "Qwen3 14B Instruct (AWQ int4)|Qwen/Qwen3-14B-AWQ|awq"
-  "Gemma 3 12B IT (FP16)|google/gemma-3-12b-it|fp16"
-  "Gemma 3 27B IT (FP16, borderline on memory)|google/gemma-3-27b-it|fp16"
-  "OpenAI GPT‑OSS 20B (FP16)|openai/gpt-oss-20b|fp16"
-  "Llama 4 Scout 17B‑16E (experimental; may require 4‑bit not always supported)|meta-llama/Llama-4-Scout-17B-16E|experimental"
 )
+
 
 cat <<'HDR'
 Start vLLM — AMD Strix Halo (gfx1151)
@@ -129,9 +121,6 @@ case "$COMPAT" in
 esac
 
 [[ -n "$NOTE" ]] && echo "Note: $NOTE"
-
-# fp16 default
-esac
 
 print_divider
 printf 'Max context tokens (--max-model-len) [%s]: ' "$MAX_MODEL_LEN_DEFAULT"
