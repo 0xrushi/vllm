@@ -96,3 +96,6 @@ printf '  - %-16s → %s\n' "vLLM server" "vllm serve Qwen/Qwen2.5-7B-Instruct -
 printf '  - %-16s → %s\n' "API test"    "curl localhost:8000/v1/chat/completions (see README)"
 echo
 printf 'SSH tip: ssh -L 8000:localhost:8000 user@host\n\n'
+
+unset PROMPT_COMMAND
+PS1='\u@\h:\w\$ '
