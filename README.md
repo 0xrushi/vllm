@@ -112,9 +112,7 @@ You should receive a JSON response with a `choices[0].message.content` reply.
 If you don't want to bother specifying the model name, you can run this which will query the currently deployed model:
 
 ```bash
-MODEL=$(curl -s http://localhost:8000/v1/models | jq -r '.data[0].id')
-
-curl -X POST http://localhost:8000/v1/chat/completions \
+MODEL=$(curl -s http://localhost:8000/v1/models | jq -r '.data[0].id') curl -X POST http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d "{
     \"model\": \"$MODEL\",
@@ -128,10 +126,11 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 
 Prefer this for persistent services. **Always mount a host directory for weights** so they live outside the container. If the model isn't present, vLLM will fetch it from **Hugging Face** into the mapped directory.
 
+**Qwen2.5 7B Instruct**
+
 ```bash
-podman run \
-  -d \
-  --name vllm \
+podman run -d --name vllm-qwen2p5-7b \
+  --ipc=host \
   --network host \
   --device /dev/kfd \
   --device /dev/dri \
@@ -147,6 +146,47 @@ podman run \
 ```
 
 > Not using `--network host`? Map a port instead: `-p 8000:8000`.
+
+For other models, you can try:
+
+
+**Qwen3 30B A3B Instruct (2507)**
+
+```bash
+podman run -d --name vllm-qwen3-30b-a3b \
+  --ipc=host \
+  --network host \
+  --device /dev/kfd \
+  --device /dev/dri \
+  --group-add video \
+  --group-add render \
+  -v ~/vllm-models:/models \
+  -v ~/.cache/vllm:/root/.cache/vllm \
+  docker.io/kyuz0/vllm-therock-gfx1151-aotriton:latest \
+  bash -lc 'source /torch-therock/.venv/bin/activate; \
+    TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1 \
+    vllm serve Qwen/Qwen3-30B-A3B-Instruct-2507 --dtype float16 \
+      --host 0.0.0.0 --port 8000 --download-dir /models'
+```
+
+**Qwen3 14B AWQ**  *(requires extra flags on ROCm)*
+
+```bash
+podman run -d --name vllm-qwen3-14b-awq \
+  --ipc=host \
+  --network host \
+  --device /dev/kfd \
+  --device /dev/dri \
+  --group-add video \
+  --group-add render \
+  -v ~/vllm-models:/models \
+  -v ~/.cache/vllm:/root/.cache/vllm \
+  docker.io/kyuz0/vllm-therock-gfx1151-aotriton:latest \
+  bash -lc 'source /torch-therock/.venv/bin/activate; \
+    TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1 \
+    vllm serve Qwen/Qwen3-14B-AWQ --quantization awq --dtype float16 --enforce-eager \
+      --host 0.0.0.0 --port 8000 --download-dir /models'
+```
 
 ---
 
