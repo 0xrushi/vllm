@@ -12,9 +12,9 @@ models=(
   "Qwen2.5 7B Instruct|Qwen/Qwen2.5-7B-Instruct|"
   "Qwen3 30B A3B Instruct|Qwen/Qwen3-30B-A3B-Instruct-2507|"
   "Qwen3 14B AWQ|Qwen/Qwen3-14B-AWQ|--quantization awq --dtype float16 --enforce-eager"
-  "Gemma 3 27B instruct|gemma-3-27b-it|"
-  "Gemma 3 12B Instruct|gemma-3-12b-it|"
-  "Gemma 3 4B Instruct|gemma-3-4b-it|"
+  "Gemma 3 27B instruct|google/gemma-3-27b-it|"
+  "Gemma 3 12B Instruct|google/gemma-3-12b-it|"
+  "Gemma 3 4B Instruct|google/gemma-3-4b-it|"
 )
 
 echo "Select a model:"
