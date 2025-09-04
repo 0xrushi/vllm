@@ -1,45 +1,51 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# start_vllm_basic — pick a known-good model, print the vLLM command, run it.
-# No extra flags; uses vLLM defaults.
+# Defaults (override via env: HOST, PORT, DOWNLOAD_DIR, EXTRA_FLAGS)
+HOST="${HOST:-0.0.0.0}"
+PORT="${PORT:-8000}"
+DOWNLOAD_DIR="${DOWNLOAD_DIR:-$HOME/vllm-models}"
+EXTRA_FLAGS="${EXTRA_FLAGS:-}"
 
-# Optional: activate the toolbox venv if present
-if [[ -f "/torch-therock/.venv/bin/activate" ]]; then
-  # shellcheck disable=SC1091
-  source "/torch-therock/.venv/bin/activate"
-fi
-
-# Only the models you've reported working
-MODELS=(
-  "meta-llama/Llama-2-7b-chat-hf|Llama 2 7B Chat"
-  "Qwen/Qwen2.5-7B-Instruct|Qwen2.5 7B Instruct"
-  "Qwen/Qwen3-30B-A3B-Instruct-2507|Qwen3 30B A3B Instruct"
-  "Qwen/Qwen3-14B-AWQ|Qwen3 14B AWQ"
+models=(
+  "Llama 2 7B Chat|meta-llama/Llama-2-7b-chat-hf|"
+  "Qwen2.5 7B Instruct|Qwen/Qwen2.5-7B-Instruct|"
+  "Qwen3 30B A3B Instruct|Qwen/Qwen3-30B-A3B-Instruct-2507|"
+  "Qwen3 14B AWQ|Qwen/Qwen3-14B-AWQ|--quantization awq --dtype float16 --enforce-eager"
 )
 
 echo "Select a model:"
-for i in "${!MODELS[@]}"; do
-  IFS='|' read -r _ label <<<"${MODELS[$i]}"
-  printf "  [%d] %s\n" "$((i+1))" "$label"
+for i in "${!models[@]}"; do
+  name="${models[$i]%%|*}"
+  printf "  [%d] %s\n" "$((i+1))" "$name"
 done
 
 read -rp "Enter number: " choice
-if ! [[ "$choice" =~ ^[1-9][0-9]*$ ]] || (( choice < 1 || choice > ${#MODELS[@]} )); then
-  echo "Invalid choice." >&2
-  exit 1
+[[ "$choice" =~ ^[1-9][0-9]*$ ]] || { echo "Invalid choice."; exit 1; }
+idx=$((choice-1))
+(( idx >= 0 && idx < ${#models[@]} )) || { echo "Invalid choice."; exit 1; }
+
+IFS='|' read -r label repo flags <<< "${models[$idx]}"
+
+mkdir -p "$DOWNLOAD_DIR"
+
+CMD=(vllm serve "$repo" --host "$HOST" --port "$PORT" --download-dir "$DOWNLOAD_DIR")
+
+# Per-model flags
+if [[ -n "${flags:-}" ]]; then
+  # shellcheck disable=SC2206
+  CMD+=($flags)
 fi
 
-IFS='|' read -r MODEL _ <<<"${MODELS[$((choice-1))]}"
-
-CMD=(vllm serve "$MODEL")
-
-# Minimal, model-specific additions
-if [[ "$MODEL" == "Qwen/Qwen3-14B-AWQ" ]]; then
-  # Needed on your ROCm setup for AWQ
-  CMD+=(--quantization awq --dtype float16 --enforce-eager)
+# Optional global extras: e.g. EXTRA_FLAGS="--gpu-memory-utilization 0.8"
+if [[ -n "${EXTRA_FLAGS:-}" ]]; then
+  # shellcheck disable=SC2206
+  CMD+=($EXTRA_FLAGS)
 fi
 
-printf 'Running:\n\n  %q' "${CMD[0]}"; for ((i=1;i<${#CMD[@]};i++)); do printf ' %q' "${CMD[$i]}"; done; printf '\n\n'
+echo -e "Running:\n\n  ${CMD[@]}\n"
+echo "API test  →  curl -s http://localhost:${PORT}/v1/models | jq -r '.data[0].id'"
+echo "SSH tip   →  ssh -L ${PORT}:localhost:${PORT} user@host"
+echo
 
 exec "${CMD[@]}"

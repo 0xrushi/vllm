@@ -31,9 +31,23 @@ This setup is **highly experimental** on ROCm/Strix Halo. Some models work; **ma
 
 ---
 
+## Table of Contents
+
+* [1) Toolbx vs Docker/Podman](#1-toolbx-vs-dockerpodman)
+* [2) Quickstart — Fedora Toolbx (development)](#2-quickstart--fedora-toolbx-development)
+* [3) Testing the API](#3-testing-the-api)
+* [4) Quickstart — Podman/Docker](#4-quickstart--podmandocker)
+* [5) Models, dtypes & storage](#5-models-dtypes--storage)
+* [6) Performance notes (short)](#6-performance-notes-short)
+* [7) Requirements (host)](#7-requirements-host)
+* [8) Acknowledgements & Links](#8-acknowledgements--links)
+* [Tested Models](#tested-models)
+* [Contributing](#contributing)
+
+
 ## 1) Toolbx vs Docker/Podman
 
-The `kyuz0/pytorch-therock-gfx1151-aotriton-builder` image can be used both as: 
+The `kyuz0/vllm-therock-gfx1151-aotriton:latest` image can be used both as: 
 
 * **Fedora Toolbx (recommended for development):** Toolbx shares your **HOME** and user, so models/configs live on the host. Great for iterating quickly while keeping the host clean. 
 * **Docker/Podman (recommended for deployment/perf):** Use for running vLLM as a service (host networking, IPC tuning, etc.). Always **mount a host directory** for model weights so they stay outside the container.
@@ -63,13 +77,14 @@ toolbox enter vllm
 mkdir -p ~/vllm-models
 ```
 
-Serve a model with vLLM (downloads to `~/vllm-models`; if the model isn't present, it will be fetched from Hugging Face automatically):
+Serve a model using the helper script **`start-vllm`** (it prints the exact `vllm serve` command and then runs it). Models download to `~/vllm-models` by default; if a model isn't present, it will be fetched from Hugging Face automatically:
 
 ```bash
-vllm serve Qwen/Qwen2.5-7B-Instruct \
-  --host 0.0.0.0 --port 8000 \
-  --download-dir ~/vllm-models
+start-vllm
+# pick a model from the menu; the script prints the serve command and launches it
 ```
+
+> Defaults: `0.0.0.0:8000` and `~/vllm-models` for weights. You can still run `vllm serve` manually if you prefer.
 
 > Toolbx shares HOME by design, so `~/vllm-models` stays on the host and survives toolbox updates.
 >
