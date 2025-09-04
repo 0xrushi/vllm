@@ -39,6 +39,48 @@ RUN cd vllm && \
     sed -i '/def rocm_platform_plugin/,/return "vllm.platforms.rocm.RocmPlatform" if is_rocm else None/s/finally:\n            amdsmi.amdsmi_shut_down()/finally:\n            # amdsmi disabled\n            pass/' vllm/platforms/__init__.py && \
     sed -i '/def rocm_platform_plugin/,/return "vllm.platforms.rocm.RocmPlatform" if is_rocm else None/s/logger.debug("ROCm platform is not available because: %s", str(e))/logger.debug("ROCm platform check failed: %s", str(e))\n        # Still default to ROCm as fallback\n        is_rocm = True/' vllm/platforms/__init__.py
 
+# Also patch vllm/platforms/rocm.py to avoid amdsmi at runtime
+RUN cd vllm && python - <<'PY'
+from pathlib import Path
+p = Path("vllm/platforms/rocm.py")
+s = p.read_text()
+
+# Add amdsmi stubs if missing
+if "def amdsmi_init" not in s:
+    s += """
+
+# --- vllm-therock patch: tolerate missing 'amdsmi' ---
+try:
+    amdsmi
+except Exception:
+    amdsmi = None
+
+if 'amdsmi_init' not in globals():
+    def amdsmi_init(): return None
+    def amdsmi_shut_down(): return None
+"""
+
+# Override get_device_name to avoid amdsmi
+if "vllm_therock_rocm_get_device_name" not in s:
+    s += r"""
+
+def vllm_therock_rocm_get_device_name(self, device_id: int = 0):
+    try:
+        import torch
+        return torch.cuda.get_device_name(device_id)
+    except Exception:
+        return "AMD-gfx1151"
+
+try:
+    RocmPlatform.get_device_name = vllm_therock_rocm_get_device_name
+except Exception:
+    pass
+"""
+p.write_text(s)
+print("Patched", p)
+PY
+
+
 # Build vLLM
 RUN source .venv/bin/activate && \
     cd vllm && \
