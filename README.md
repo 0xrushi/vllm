@@ -7,11 +7,33 @@ An **Arch-based** Docker/Podman container that is **Toolbx-compatible** (usable 
 
 ---
 
+## ⚠️ Status & Expectations (Experimental)
+
+This setup is **highly experimental** on ROCm/Strix Halo. Some models work; **many fail** due to missing custom kernels, unsupported quant types, or TorchInductor/AOTriton limitations on gfx1151. The matrix below lists combinations tested so far. **Please contribute fixes** or additional working recipes (see *Contributing*).
+
+---
+
+## Tested Models (Experimental Matrix)
+
+> **Legend:** ✅ Works (with flags) · ❌ Fails · ⚠️ Notes include the *exact* error/symptom seen.
+
+| Model (Hugging Face)               | Params / Quant |               Status | Required flags (if any)                              | Notes / Errors                                                                                       |
+| ---------------------------------- | -------------- | -------------------: | ---------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `Qwen/Qwen2.5-7B-Instruct`         | 7B FP16        |              ✅ Works | (recommended) `--dtype float16`                      | Good baseline; simple serve works.                                                                   |
+| `meta-llama/Llama-2-7b-chat-hf`    | 7B FP16        |              ✅ Works | (recommended) `--dtype float16`                      | Stable.                                                                                              |
+| `Qwen/Qwen3-30B-A3B-Instruct-2507` | 30B (A3B) FP16 |              ✅ Works | (recommended) `--dtype float16`                      | Heavy; ensure **unified memory** tweaks.                                                             |
+| `Qwen/Qwen3-14B-AWQ`               | 14B AWQ        | ✅ Works (with flags) | `--quantization awq --dtype float16 --enforce-eager` | On ROCm, eager avoids missing `awq_dequantize` during compile; vLLM auto‑sets `VLLM_USE_TRITON_AWQ`. |
+| `openai/gpt-oss-20b`               | 20B MXFP4      |              ❌ Fails | —                                                    | `ModuleNotFoundError: triton_kernels.matmul_ogs` (MXFP4 path not available in this image).           |
+| `zai-org/GLM-4.5-Air-FP8`          | FP8            |              ❌ Fails | —                                                    | `ValueError: type fp8e4nv not supported (only 'fp8e5')`.                                             |
+| `cpatonn/GLM-4.5-Air-AWQ-4bit`     | AWQ-4bit (MoE) |              ❌ Fails | —                                                    | Missing custom op: `torch.ops._C.gptq_marlin_repack` (Marlin kernels).                               |
+
+> If you get a model to work, please PR a new row with: **model name**, **exact flags**, vLLM version, `torch` & `triton` versions, and a note on **gfx1151** driver/kernel stack.
+
+---
+
 ## 1) Toolbx vs Docker/Podman
 
 The `kyuz0/pytorch-therock-gfx1151-aotriton-builder` image can be used both as: 
-
-## &#x20;
 
 * **Fedora Toolbx (recommended for development):** Toolbx shares your **HOME** and user, so models/configs live on the host. Great for iterating quickly while keeping the host clean. 
 * **Docker/Podman (recommended for deployment/perf):** Use for running vLLM as a service (host networking, IPC tuning, etc.). Always **mount a host directory** for model weights so they stay outside the container.
@@ -55,14 +77,14 @@ vllm serve Qwen/Qwen2.5-7B-Instruct \
 >
 > ```bash
 > du -sh ~/.cache/vllm/torch_compile_cache/
-> # e.g., 138M  /home/kyuz0/.cache/vllm/torch_compile_cache/
+> # e.g., 138M  /home/you/.cache/vllm/torch_compile_cache/
 > ```
 
 ---
 
 ## 3) Testing the API
 
-Once the server is up (from section 2), hit the OpenAI‑compatible endpoint:
+Once the server is up, hit the OpenAI‑compatible endpoint:
 
 ```bash
 curl -X POST http://localhost:8000/v1/chat/completions \
@@ -71,6 +93,19 @@ curl -X POST http://localhost:8000/v1/chat/completions \
 ```
 
 You should receive a JSON response with a `choices[0].message.content` reply.
+
+If you don't want to bother specifying the model name, you can run this which will query the currently deployed model:
+
+```bash
+MODEL=$(curl -s http://localhost:8000/v1/models | jq -r '.data[0].id')
+
+curl -X POST http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"model\": \"$MODEL\",
+    \"messages\":[{\"role\":\"user\",\"content\":\"Hello! Test the performance.\"}]
+  }"
+```
 
 ---
 
@@ -156,9 +191,21 @@ Enable large GTT/unified memory so the iGPU can borrow system RAM for bigger mod
 
 ---
 
-## 8) Acknowledgements & Links
+## 8) Contributing
+
+Spotted a fix, a working flag combo, or a model that should be on the list? **PRs welcome!** Please include:
+
+* Model repo + exact version tag (if any)
+* Full `vllm serve` command/flags that work
+* vLLM version, `torch` & `triton` versions (`python -c "import torch, triton; print(torch.__version__, triton.__version__)"`)
+* Short log snippet of success/failure (especially the **first** error)
+* Any relevant kernel/AOTriton env vars (e.g., `TORCH_ROCM_AOTRITON_ENABLE_EXPERIMENTAL=1`)
+
+---
+
+## 9) Acknowledgements & Links
 
 * Base images & docs: [https://github.com/kyuz0/amd-strix-halo-pytorch-gfx1151-aotriton](https://github.com/kyuz0/amd-strix-halo-pytorch-gfx1151-aotriton)
 * Upstreams: [vLLM](https://github.com/vllm-project/vllm), [ROCm/TheRock](https://github.com/ROCm/TheRock), [AOTriton](https://github.com/ROCm/aotriton)
 * Community: **AMD Strix Halo Home Lab Discord** — [https://discord.gg/pnPRyucNrG](https://discord.gg/pnPRyucNrG)
-* Big thanks to **lhl** and **ssweens** for prior art and inspiration.
+* Big thanks to **lhl** and **ssweens** for doing the actual heavy lifting for this.
