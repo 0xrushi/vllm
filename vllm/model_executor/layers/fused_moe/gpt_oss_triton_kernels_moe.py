@@ -17,12 +17,16 @@ logger = init_logger(__name__)
 
 if has_triton_kernels():
     try:
-        import triton_kernels.swiglu
-        from triton_kernels.matmul_ogs import (FnSpecs, FusedActivation,
-                                               matmul_ogs)
-        from triton_kernels.routing import (RoutingData, routing,
-                                            routing_from_bitmatrix)
-        from triton_kernels.tensor import Bitmatrix
+        from kernels import get_kernel
+        ogs = get_kernel("kernels-community/triton_kernels")
+
+        FnSpecs = ogs.matmul_ogs.FnSpecs
+        FusedActivation = ogs.matmul_ogs.FusedActivation
+        matmul_ogs = ogs.matmul_ogs.matmul_ogs
+        RoutingData = ogs.routing.RoutingData
+        routing = ogs.routing.routing
+        routing_from_bitmatrix = ogs.routing.routing_from_bitmatrix
+        Bitmatrix = ogs.tensor.Bitmatrix
     except (AttributeError, ImportError) as e:
         logger.error(
             "Failed to import Triton kernels. Please make sure your triton "
@@ -140,7 +144,7 @@ def triton_kernel_fused_experts(
         global_num_experts = E
 
     act = FusedActivation(
-        FnSpecs("swiglu", triton_kernels.swiglu.swiglu_fn, ("alpha", "limit")),
+        FnSpecs("swiglu", ogs.swiglu.swiglu_fn, ("alpha", "limit")),
         (swiglu_alpha, swiglu_limit), 2)
     gammas = routing_data.gate_scal if routing_data else None
 

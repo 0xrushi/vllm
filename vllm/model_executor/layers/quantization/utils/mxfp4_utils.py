@@ -16,11 +16,18 @@ OCP_MX_BLOCK_SIZE = 32
 def _swizzle_mxfp4(quant_tensor, scale, num_warps):
     """ weight swizzle for mxfp4 moe, used for OAI mxfp4 kernel
     """
-    import triton_kernels.matmul_ogs_details.opt_flags as opt_flags
-    from triton_kernels.numerics import InFlexData
-    from triton_kernels.tensor import FP4, convert_layout, wrap_torch_tensor
-    from triton_kernels.tensor_details import layout
-    from triton_kernels.tensor_details.layout import StridedLayout
+    from kernels import get_kernel
+    ogs = get_kernel("kernels-community/triton_kernels")
+    FlexCtx = ogs.matmul_ogs.FlexCtx
+    PrecisionConfig = ogs.matmul_ogs.PrecisionConfig
+
+    opt_flags = ogs.matmul_ogs_details.opt_flags
+    InFlexData = ogs.numerics.InFlexData
+    FP4 = ogs.tensor.FP4
+    convert_layout = ogs.tensor.convert_layout
+    wrap_torch_tensor = ogs.tensor.wrap_torch_tensor
+    layout = ogs.tensor_details.layout
+    StridedLayout = ogs.tensor_details.layout.StridedLayout
 
     value_layout_opts: dict[str, Any] = {}
     scale_layout_opts: dict[str, Any] = {}
@@ -35,8 +42,7 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
         value_layout = StridedLayout
         scale_layout = StridedLayout
     elif current_platform.is_rocm():
-        from triton_kernels.tensor_details.layout import (GFX950MXScaleLayout,
-                                                          StridedLayout)
+        GFX950MXScaleLayout = ogs.tensor_details.layout.GFX950MXScaleLayout
 
         from vllm.platforms.rocm import on_gfx950
         value_layout = StridedLayout

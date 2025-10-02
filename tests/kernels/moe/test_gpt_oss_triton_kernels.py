@@ -14,14 +14,19 @@ if not has_triton_kernels():
         allow_module_level=True,
     )
 
-import triton_kernels.swiglu
-from triton_kernels.matmul_ogs import FlexCtx, PrecisionConfig
-from triton_kernels.numerics import InFlexData
-from triton_kernels.numerics_details.mxfp import (downcast_to_mxfp,
-                                                  upcast_from_mxfp)
-from triton_kernels.tensor import FP4, convert_layout, wrap_torch_tensor
-from triton_kernels.tensor_details import layout
-from triton_kernels.testing import assert_close
+from kernels import get_kernel
+ogs = get_kernel("kernels-community/triton_kernels")
+
+FlexCtx = ogs.matmul_ogs.FlexCtx
+PrecisionConfig = ogs.matmul_ogs.PrecisionConfig
+InFlexData = ogs.numerics.InFlexData
+downcast_to_mxfp = ogs.numerics_details.mxfp.downcast_to_mxfp
+upcast_from_mxfp = ogs.numerics_details.mxfp.upcast_from_mxfp
+FP4 = ogs.tensor.FP4
+convert_layout = ogs.tensor.convert_layout
+wrap_torch_tensor = ogs.tensor.wrap_torch_tensor
+layout = ogs.tensor_details.layout
+assert_close = ogs.testing.assert_close
 
 from vllm.model_executor.layers.fused_moe.config import FusedMoEQuantConfig
 from vllm.model_executor.layers.fused_moe.fused_batched_moe import (
@@ -448,10 +453,10 @@ def test_unit_shuffle():
     out_ref = swiglu(out_ref, limit=1.0)
 
     out = x @ m_shuffled
-    out = triton_kernels.swiglu.swiglu_torch(
+    out = ogs.swiglu.swiglu_torch(
         out,
         alpha=1.702,
-        precision_config=triton_kernels.swiglu.PrecisionConfig(limit=1.0),
+        precision_config=ogs.swiglu.PrecisionConfig(limit=1.0),
     )
 
     assert_close(ref=out_ref, tri=out)
