@@ -21,7 +21,7 @@ if has_triton_kernels():
         from kernels import get_kernel
         ogs = get_kernel("kernels-community/triton_kernels")
         PrecisionConfig = ogs.matmul_ogs.PrecisionConfig
-    except ImportError:
+    except (ImportError, AttributeError):
         logger.error(
             "Failed to import Triton kernels. Please make sure your triton "
             "version is compatible.")

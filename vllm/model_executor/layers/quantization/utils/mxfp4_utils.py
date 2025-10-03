@@ -21,7 +21,14 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
     FlexCtx = ogs.matmul_ogs.FlexCtx
     PrecisionConfig = ogs.matmul_ogs.PrecisionConfig
 
-    opt_flags = ogs.matmul_ogs_details.opt_flags
+    # Some OGS builds expose opt_flags under matmul_ogs_details.opt_flags,
+    # others re-export update_opt_flags_constraints from matmul_ogs.
+    try:
+        update_opt_flags_constraints = (
+            ogs.matmul_ogs_details.opt_flags.update_opt_flags_constraints
+        )
+    except AttributeError:
+        update_opt_flags_constraints = ogs.matmul_ogs.update_opt_flags_constraints
     InFlexData = ogs.numerics.InFlexData
     FP4 = ogs.tensor.FP4
     convert_layout = ogs.tensor.convert_layout
@@ -59,7 +66,7 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
             "is_persistent": True,
             "epilogue_subtile": 1,
         }
-        opt_flags.update_opt_flags_constraints(constraints)
+        update_opt_flags_constraints(constraints)
     # transpose the tensor so that the quantization axis is on dim1
     quant_tensor = quant_tensor.transpose(-2, -1)
     scale = scale.transpose(-2, -1)

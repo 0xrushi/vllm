@@ -576,10 +576,16 @@ class Mxfp4MoEMethod(FusedMoEMethodBase):
                 layer.w2_weight_scale = torch.nn.Parameter(
                     w2_scales_interleaved, requires_grad=False)
         elif self.mxfp4_backend == Mxfp4Backend.TRITON:
-            from kernels import get_kernel
-            ogs = get_kernel("kernels-community/triton_kernels")
-            FlexCtx = ogs.matmul_ogs.FlexCtx
-            PrecisionConfig = ogs.matmul_ogs.PrecisionConfig
+            try:
+                from kernels import get_kernel
+                ogs = get_kernel("kernels-community/triton_kernels")
+                FlexCtx = ogs.matmul_ogs.FlexCtx
+                PrecisionConfig = ogs.matmul_ogs.PrecisionConfig
+            except (ImportError, AttributeError) as e:
+                logger.error(
+                    "Failed to import Triton kernels for MXFP4 backend: %s",
+                    e)
+                raise
 
             w13_bias = layer.w13_bias.to(torch.float32)
             w2_bias = layer.w2_bias.to(torch.float32)
