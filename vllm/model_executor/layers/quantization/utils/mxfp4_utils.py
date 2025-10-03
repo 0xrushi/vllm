@@ -37,8 +37,13 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
     FP4 = ogs.tensor.FP4
     convert_layout = ogs.tensor.convert_layout
     wrap_torch_tensor = ogs.tensor.wrap_torch_tensor
-    layout = ogs.tensor_details.layout
-    StridedLayout = ogs.tensor_details.layout.StridedLayout
+    # Layout helpers can differ across OGS builds; guard and fall back
+    try:
+        layout = ogs.tensor_details.layout
+        StridedLayout = ogs.tensor_details.layout.StridedLayout
+    except AttributeError:
+        layout = None
+        StridedLayout = None
 
     value_layout_opts: dict[str, Any] = {}
     scale_layout_opts: dict[str, Any] = {}
@@ -53,17 +58,34 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
         value_layout = StridedLayout
         scale_layout = StridedLayout
     elif current_platform.is_rocm():
-        GFX950MXScaleLayout = ogs.tensor_details.layout.GFX950MXScaleLayout
+        # Prefer arch-specific MX scale layout if available; otherwise fallback
+        try:
+            GFX950MXScaleLayout = ogs.tensor_details.layout.GFX950MXScaleLayout
+        except AttributeError:
+            GFX950MXScaleLayout = None
+        try:
+            HopperMXScaleLayout = ogs.tensor_details.layout.HopperMXScaleLayout
+        except AttributeError:
+            HopperMXScaleLayout = None
 
         from vllm.platforms.rocm import on_gfx950
         value_layout = StridedLayout
-        scale_layout = GFX950MXScaleLayout if on_gfx950() else StridedLayout
+        if GFX950MXScaleLayout and on_gfx950():
+            scale_layout = GFX950MXScaleLayout
+        elif HopperMXScaleLayout:
+            scale_layout = HopperMXScaleLayout
+        else:
+            scale_layout = StridedLayout
     else:
-        value_layout, value_layout_opts = \
-            layout.make_default_matmul_mxfp4_w_layout(mx_axis=1)
-        scale_layout, scale_layout_opts = (
-            layout.make_default_matmul_mxfp4_w_scale_layout(
-                mx_axis=1, num_warps=num_warps))
+        if layout is not None:
+            value_layout, value_layout_opts = \
+                layout.make_default_matmul_mxfp4_w_layout(mx_axis=1)
+            scale_layout, scale_layout_opts = (
+                layout.make_default_matmul_mxfp4_w_scale_layout(
+                    mx_axis=1, num_warps=num_warps))
+        else:
+            value_layout = None
+            scale_layout = None
     if current_platform.is_cuda() and \
         current_platform.is_device_capability(100):
         constraints = {
@@ -74,10 +96,15 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
     # transpose the tensor so that the quantization axis is on dim1
     quant_tensor = quant_tensor.transpose(-2, -1)
     scale = scale.transpose(-2, -1)
-    quant_tensor = convert_layout(wrap_torch_tensor(quant_tensor, dtype=FP4),
-                                  value_layout, **value_layout_opts)
-    scale = convert_layout(wrap_torch_tensor(scale), scale_layout,
-                           **scale_layout_opts)
+    if value_layout is None or scale_layout is None:
+        # As a last resort, wrap without converting layout (performance fallback)
+        quant_tensor = wrap_torch_tensor(quant_tensor, dtype=FP4)
+        scale = wrap_torch_tensor(scale)
+    else:
+        quant_tensor = convert_layout(wrap_torch_tensor(quant_tensor, dtype=FP4),
+                                      value_layout, **value_layout_opts)
+        scale = convert_layout(wrap_torch_tensor(scale), scale_layout,
+                               **scale_layout_opts)
     return quant_tensor, value_flex, scale
 
 
