@@ -29,7 +29,11 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
         )
     except AttributeError:
         update_opt_flags_constraints = ogs.matmul_ogs.update_opt_flags_constraints
-    InFlexData = ogs.numerics.InFlexData
+    # Some builds don't expose ogs.numerics. Fall back to FlexCtx().rhs_data
+    try:
+        value_flex = ogs.numerics.InFlexData()
+    except AttributeError:
+        value_flex = FlexCtx().rhs_data
     FP4 = ogs.tensor.FP4
     convert_layout = ogs.tensor.convert_layout
     wrap_torch_tensor = ogs.tensor.wrap_torch_tensor
@@ -74,7 +78,7 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
                                   value_layout, **value_layout_opts)
     scale = convert_layout(wrap_torch_tensor(scale), scale_layout,
                            **scale_layout_opts)
-    return quant_tensor, InFlexData(), scale
+    return quant_tensor, value_flex, scale
 
 
 def _can_support_mxfp4(use_grouped_topk: bool = False,
