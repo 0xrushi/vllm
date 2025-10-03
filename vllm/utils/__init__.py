@@ -3430,8 +3430,13 @@ def has_deep_gemm() -> bool:
 
 def has_triton_kernels() -> bool:
     """Whether the optional `triton_kernels` package is available."""
-
-    return _has_module("triton_kernels")
+    try:
+        from kernels import get_kernel
+        ogs = get_kernel("kernels-community/triton_kernels")
+        _ = ogs.matmul_ogs
+        return True
+    except Exception:
+        return False
 
 
 def has_tilelang() -> bool:
