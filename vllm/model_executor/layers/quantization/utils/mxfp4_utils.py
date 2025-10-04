@@ -72,8 +72,12 @@ def _swizzle_mxfp4(quant_tensor, scale, num_warps):
         value_layout = StridedLayout
         if GFX950MXScaleLayout and on_gfx950():
             scale_layout = GFX950MXScaleLayout
+            # MX scale layouts require axis (and often num_warps) to be set
+            scale_layout_opts = {"mx_axis": 1, "num_warps": num_warps}
         elif HopperMXScaleLayout:
             scale_layout = HopperMXScaleLayout
+            # Ensure required constructor kwargs are provided
+            scale_layout_opts = {"mx_axis": 1, "num_warps": num_warps}
         else:
             scale_layout = StridedLayout
     else:
